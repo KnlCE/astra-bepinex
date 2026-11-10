@@ -1,17 +1,34 @@
 name: release
-# On a pushed tag "v*": build this integration from PUBLIC inputs only and attach astra-gi.zip — the
-# one file Astra installs — to that tag's GitHub release. The inputs: NuGet packages pinned by
-# packages.lock.json, and the Astra foundation's release files (its SDK, and its zip with BepInEx),
-# each checked against the SHA-256 tools/fetch.sh pins. This workflow never touches the game's files,
-# and never could: GitHub Actions has no copy of the game. So keep GameDir empty and reach the
-# game's types through Astra.Sdk.GameType.
+#if (mono)
+# On a pushed tag "v*": build this integration from PUBLIC inputs only, attest the zip and attach
+# astra-gi.zip — the one file Astra installs — to that tag's GitHub release. The inputs: NuGet
+# packages pinned by packages.lock.json, and the Astra foundation's release files (its SDK, and its
+# zip with BepInEx), each checked against the SHA-256 tools/fetch.sh pins. This workflow never
+# touches the game's files, and never could: GitHub Actions has no copy of the game. So keep GameDir
+# empty and reach the game's types through Astra.Sdk.GameType.
+#else
+# On a pushed tag "v*": pack the build you COMMITTED into astra-gi.zip — the one file Astra
+# installs — attest the zip and attach it to that tag's GitHub release. Nothing is compiled here:
+# an IL2CPP plugin compiles against the interop assemblies BepInEx generates from the game's own
+# files, and GitHub Actions has no copy of the game. So you build on your machine
+# (`dotnet build -c Release -p:GameDir=…` leaves the plugin and its marker in prebuilt/), commit
+# prebuilt/, and tag. The rest of the zip is the Astra foundation's release zip (with BepInEx 6),
+# checked against the SHA-256 tools/fetch.sh pins. Never commit the interop assemblies themselves.
+#endif
+#
+# The attestation is GitHub's signed statement that THIS workflow, in THIS repository, made this
+# exact zip from the tagged commit. Astra's Workshop takes a release only with one, signed by this
+# file — so keep the file's name and path, the attestation step and the permissions it signs with.
+# Anyone can check a release:
+#   gh attestation verify astra-gi.zip --repo <owner>/<repository> \
+#     --signer-workflow <owner>/<repository>/.github/workflows/release.yml
 
 on:
   push:
     tags: ["v*"]
 
 permissions:
-  contents: write   # to attach astra-gi.zip to the release
+  contents: read
 
 # Every action is pinned by its COMMIT, never a tag a third party can move, because this job may
 # write to the repository. The comment names the release that commit is; to update one, take the
@@ -20,10 +37,15 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # attach astra-gi.zip to the tag's release
+      id-token: write        # the attestation's keyless signing identity (GitHub's OIDC token)
+      attestations: write    # store the attestation on GitHub
     steps:
       - name: Check out this integration
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+#if (mono)
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "8.0.x"
@@ -34,7 +56,22 @@ jobs:
           grep -q "<Version>$v</Version>" AstraIntegration.csproj || { echo "::error::the tag says $v; <Version> in AstraIntegration.csproj does not"; exit 1; }
           grep -Eq "^version = \"$v\"" astra-gi.toml || { echo "::error::the tag says $v; [integration].version in astra-gi.toml does not"; exit 1; }
           grep -Eq "^version = \"$v\"" astra-item.toml || { echo "::error::the tag says $v; version in astra-item.toml does not"; exit 1; }
+#else
+      - name: The tag, the .csproj, astra-gi.toml, astra-item.toml and the committed build name one version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          grep -q "<Version>$v</Version>" AstraIntegration.csproj || { echo "::error::the tag says $v; <Version> in AstraIntegration.csproj does not"; exit 1; }
+          grep -Eq "^version = \"$v\"" astra-gi.toml || { echo "::error::the tag says $v; [integration].version in astra-gi.toml does not"; exit 1; }
+          grep -Eq "^version = \"$v\"" astra-item.toml || { echo "::error::the tag says $v; version in astra-item.toml does not"; exit 1; }
+          [ -f prebuilt/astra-item.json ] || { echo "::error::prebuilt/astra-item.json is missing: run 'dotnet build -c Release -p:GameDir=…' and commit prebuilt/"; exit 1; }
+          grep -q "\"version\":\"$v\"" prebuilt/astra-item.json || { echo "::error::the tag says $v; the build committed in prebuilt/ is another version: rebuild (dotnet build -c Release) and commit prebuilt/"; exit 1; }
 
+      - name: prebuilt/ holds this plugin and its marker, and nothing else
+        run: |
+          [ -f prebuilt/AstraIntegration.dll ] && [ "$(ls -A prebuilt | wc -l)" = 2 ] || { echo "::error::prebuilt/ must hold exactly AstraIntegration.dll and astra-item.json; it holds: $(ls -A prebuilt | tr '\n' ' ')(never commit the game's interop assemblies or any other DLL)"; exit 1; }
+#endif
+
+#if (mono)
       - name: Fetch the Astra SDK and the foundation (digest-checked)
         run: bash tools/fetch.sh
 
@@ -43,12 +80,24 @@ jobs:
 
       - name: Build
         run: dotnet build -c Release --no-restore -p:TreatWarningsAsErrors=true
+#else
+      - name: Fetch the foundation (digest-checked)
+        run: bash tools/fetch.sh
+#endif
 
       - name: Lay out astra-gi.zip
         run: bash tools/make-astra-gi.sh
 
-      - name: List astra-gi.zip's entries
-        run: unzip -l astra-gi.zip
+      - name: List astra-gi.zip's entries, and its SHA-256
+        run: |
+          unzip -l astra-gi.zip
+          sha256sum astra-gi.zip
+
+      # Keep this step BEFORE the release step: a zip that could not be attested is never published.
+      - name: Attest astra-gi.zip's build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: astra-gi.zip
 
       - name: Attach astra-gi.zip to the release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2

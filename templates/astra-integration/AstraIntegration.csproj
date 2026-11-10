@@ -69,4 +69,14 @@
     <WriteLinesToFile File="$(OutDir)astra-item.json" Overwrite="true" WriteOnlyWhenDifferent="true"
       Lines="{&quot;id&quot;:&quot;$(BepInExPluginGuid)&quot;,&quot;version&quot;:&quot;$(Version)&quot;,&quot;kind&quot;:&quot;game-integration&quot;,&quot;runtime&quot;:&quot;$(AstraRuntime)&quot;,&quot;loader&quot;:&quot;$(AstraLoader)&quot;,&quot;steam_appid&quot;:$(SteamAppId)}" />
   </Target>
+<!--#if (!mono) -->
+
+  <!-- No CI can build an IL2CPP plugin: it compiles against the interop assemblies BepInEx generates
+       from the game's own files. So a release packs a build you COMMIT: every Release build leaves
+       the plugin and its marker in prebuilt/, the one folder tools/make-astra-gi.sh and the release
+       workflow read. Commit prebuilt/ (these two files, nothing else) before you tag. -->
+  <Target Name="AstraPrebuilt" AfterTargets="AstraItemMarker" Condition="'$(Configuration)' == 'Release'">
+    <Copy SourceFiles="$(OutDir)$(AssemblyName).dll;$(OutDir)astra-item.json" DestinationFolder="$(MSBuildProjectDirectory)/prebuilt" />
+  </Target>
+<!--#endif -->
 </Project>

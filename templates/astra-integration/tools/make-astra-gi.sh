@@ -4,13 +4,26 @@
 # doorstop_config.ini, the foundation in BepInEx/plugins/Astra/, their licences), plus this
 # plugin in BepInEx/plugins/AstraIntegration/, this repository's astra-gi.toml and its LICENSE.
 #
+#if (mono)
 # Usage: bash tools/fetch.sh && dotnet build -c Release && bash tools/make-astra-gi.sh
+#else
+# The plugin is taken from prebuilt/, the build you commit: an IL2CPP plugin compiles against the
+# game's interop assemblies, so the release workflow cannot build it and packs that folder instead.
+# `dotnet build -c Release` puts the plugin and its marker there.
+#
+# Usage: bash tools/fetch.sh && dotnet build -c Release -p:GameDir=<the game's Astra profile> \
+#          && bash tools/make-astra-gi.sh
+#endif
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 NAME=AstraIntegration
+#if (mono)
 TFM=$(sed -n 's:.*<TargetFramework>\(.*\)</TargetFramework>.*:\1:p' "$NAME.csproj" | head -1)
 BUILD=bin/Release/$TFM
+#else
+BUILD=prebuilt
+#endif
 FOUNDATION=foundation/unpacked
 
 for need in "$FOUNDATION/BepInEx/plugins/Astra/Astra.Unity.dll" "$BUILD/$NAME.dll" "$BUILD/astra-item.json" astra-gi.toml LICENSE; do

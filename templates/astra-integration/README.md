@@ -33,6 +33,7 @@ bash tools/fetch.sh       # once: the pinned Astra SDK into nuget-local/, the fo
 dotnet build -c Release   # → bin/Release/netstandard2.1/AstraIntegration.dll and astra-item.json
 #else
 dotnet build -c Release -p:GameDir=<the game's Astra profile, which holds BepInEx/interop>
+                          # → prebuilt/AstraIntegration.dll and prebuilt/astra-item.json
 #endif
 bash tools/make-astra-gi.sh   # → astra-gi.zip, what a release carries
 ```
@@ -44,7 +45,10 @@ those packages.
 #else
 An IL2CPP game's Unity API comes from the interop assemblies BepInEx 6 generates from the game on its
 first start: `GameDir` is the folder that holds `BepInEx/interop` (with Astra's launcher, the
-game's profile). Those are the game's files, so this cannot build in CI: release by hand (below).
+game's profile). Those are the game's files: build against them where they are and **never commit
+them** (`.gitignore` already keeps `interop/`, `BepInEx/` and the game's DLLs out). CI has no copy
+of the game, so it cannot compile this plugin. Instead every Release build leaves YOUR plugin and
+its marker in `prebuilt/`; you commit that folder, and the release workflow packs it (below).
 #endif
 
 ## Release
@@ -53,12 +57,24 @@ game's profile). Those are the game's files, so this cannot build in CI: release
    in `astra-gi.toml`, `version` in `astra-item.toml`.
 #if (mono)
 2. Commit, then tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
-   `.github/workflows/release.yml` builds `astra-gi.zip` and attaches it to the tag's release.
+   `.github/workflows/release.yml` builds `astra-gi.zip`, attests it and attaches it to the tag's
+   release.
 #else
-2. Build and lay out the zip (above), commit, tag and push the tag, then attach the zip:
-   `gh release create v0.1.0 astra-gi.zip`.
+2. Build on your machine: `dotnet build -c Release -p:GameDir=<the game's Astra profile>`. It
+   rewrites `prebuilt/` (your plugin's DLL and `astra-item.json`).
+3. Commit, `prebuilt/` included (those two files, nothing else), then tag and push:
+   `git tag v0.1.0 && git push origin v0.1.0`.
+   `.github/workflows/release.yml` compiles nothing: it checks that `prebuilt/` is this version,
+   packs `astra-gi.zip` from it with `tools/make-astra-gi.sh`, attests the zip and attaches it to
+   the tag's release.
 #endif
-3. A tag is final: Astra records each tag's zip by its digest. To fix anything, publish a new tag.
+
+A tag is final: Astra records each tag's zip by its digest. To fix anything, publish a new tag.
+
+The attestation is GitHub's signed statement that this repository's `release.yml` made this exact
+zip from the tagged commit. Astra's Workshop takes a release only with one, signed by that file: do
+not rename or move the workflow, and keep its attestation step and its permissions. A zip attached
+by hand (`gh release create … astra-gi.zip`) has none and is refused.
 
 Astra's Workshop checks every release's `astra-gi.toml`. Keep its `[integration.loader]` table (it
 names `winhttp.dll`, the one file placed beside the game's program that the game loads by itself)

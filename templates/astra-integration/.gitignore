@@ -6,3 +6,13 @@ nuget-local/*
 !nuget-local/.gitkeep
 foundation/
 astra-gi.zip
+# IL2CPP only: the interop assemblies BepInEx 6 generates from the game's own files, and the game's
+# own assemblies. They are the game's, never yours to publish: build against them where they are
+# (the game's Astra profile, -p:GameDir=…) and never commit a copy. prebuilt/ is the opposite: YOUR
+# built plugin and its marker, which an IL2CPP integration commits so the release workflow can pack it.
+interop/
+BepInEx/
+Il2Cpp*.dll
+Assembly-CSharp*.dll
+UnityEngine*.dll
+Unity.*.dll

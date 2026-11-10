@@ -309,17 +309,35 @@
           }
         }
       ]
+    },
+    "**/*.yml": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [
+              "#if"
+            ],
+            "else": [
+              "#else"
+            ],
+            "elseif": [
+              "#elif"
+            ],
+            "endif": [
+              "#endif"
+            ],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
     }
   },
   "sources": [
     {
       "modifiers": [
-        {
-          "condition": "(!mono)",
-          "exclude": [
-            ".github/**"
-          ]
-        },
         {
           "condition": "(!idValid || !ownerValid)",
           "exclude": [

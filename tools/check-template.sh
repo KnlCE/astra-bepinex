@@ -10,9 +10,23 @@
 # And what comes out with NO --id and NO --owner — the template as an author gets it — is a release
 # Astra's Workshop takes: `gi-probe check --provenance community` (the catalogue's own check, from
 # astra-game-launcher's release, pinned below by version and SHA-256) must pass with no finding on
-# the Mono zip built here, and on the IL2CPP manifest in a zip of everything it names. (An IL2CPP
-# plugin compiles against a game's own interop assemblies, so no machine without the game builds
-# it: its zip here is the pinned runner's files under the generated manifest, without the plugin.)
+# the Mono zip built here, and on the IL2CPP zip packed here. An IL2CPP plugin compiles against a
+# game's own interop assemblies, so no machine without the game builds it: its flavour releases a
+# build the author COMMITS in prebuilt/. Here a placeholder stands in for the plugin's DLL, the
+# project's own targets write prebuilt/ around it, and the flavour's own packer packs the zip —
+# every step of that flavour's release except the compiler.
+#
+# And each flavour's release workflow ATTESTS the zip the way AstraPlugins' templates/gi-release.yml
+# does (the catalogue's reference for an author's release workflow; pinned below by commit and
+# SHA-256). The catalogue takes a community release only with a build provenance attestation signed
+# by the author's own workflow, so the two may not drift. What is compared, per generated
+# release.yml, against the reference:
+#   - the commit actions/attest-build-provenance is pinned to: the same 40 hex digits;
+#   - the workflow's default permissions and the release job's permissions: the same key/value sets
+#     (today: contents read; and contents, id-token, attestations write);
+#   - the attested subject: astra-gi.zip in both (the reference's subject-path, through its ASSET);
+# and, of ours alone: exactly one attestation step, placed BEFORE the step that publishes the
+# release, and a step that checks the tag against the version.
 # .github/workflows/template.yml runs this script on every change to the template.
 #
 # Usage: tools/check-template.sh
@@ -38,6 +52,12 @@ fail() { echo "check-template: $*" >&2; exit 1; }
 GI_PROBE_VERSION=0.5.1
 GI_PROBE_URL=https://github.com/mihailinl/astra-game-launcher/releases/download/v$GI_PROBE_VERSION/gi-probe-linux-x64
 GI_PROBE_SHA256=dd5e1a2708042222e52bbcaa477396480853c615aa209d78fd329451381bc4a9
+
+# The catalogue's reference release workflow: bump the commit and the digest together
+# (sha256sum of the file at that commit), then make the template's release.yml agree with it.
+GI_RELEASE_COMMIT=53b832785bcc20953f12d471ad1181092a75d774
+GI_RELEASE_URL=https://raw.githubusercontent.com/mihailinl/AstraPlugins/$GI_RELEASE_COMMIT/templates/gi-release.yml
+GI_RELEASE_SHA256=7eb5d57c28825d7f9f4a3b4e56cfb0b089f28d9f64b3f38b82d846f31b1dc7cd
 
 dotnet new install "$REPO/templates/astra-integration" "${HIVE[@]}" >/dev/null
 GAME='X "Gate" & <Co>\Back'
@@ -106,11 +126,101 @@ dir=$(dotnet msbuild "$W/gamedir/AstraHostile.csproj" -getProperty:GameDir)
 [ "$dir" = '/games/A & B "c"' ] || fail "GameDir is '$dir'"
 echo "projects: OK"
 
-# The workflow: every action pinned by a full commit SHA.
-wf="$W/mono/.github/workflows/release.yml"
-unpinned=$(grep -E '^\s*(- )?uses:' "$wf" | grep -vE '@[0-9a-f]{40}( |$)' || true)
-[ -z "$unpinned" ] || fail "actions not pinned by commit: $unpinned"
-[ ! -e "$W/il2cpp/.github" ] || fail "the IL2CPP flavour got a workflow (no CI can build it)"
+# The workflows, both flavours: every action pinned by a full commit SHA, and the attestation the
+# catalogue's reference workflow makes (the header says what is compared).
+curl -fsSL -o "$W/gi-release.yml" "$GI_RELEASE_URL" || fail "the reference workflow did not download ($GI_RELEASE_URL)"
+echo "$GI_RELEASE_SHA256  $W/gi-release.yml" | sha256sum -c --quiet >/dev/null 2>&1 \
+  || fail "$GI_RELEASE_URL is not the file this script pins (sha256 $GI_RELEASE_SHA256)"
+for inst in mono il2cpp community-mono community-il2cpp; do
+  wf="$W/$inst/.github/workflows/release.yml"
+  [ -f "$wf" ] || fail "$inst: no .github/workflows/release.yml (both flavours release through one)"
+  unpinned=$(grep -E '^\s*(- )?uses:' "$wf" | grep -vE '@[0-9a-f]{40}( |$)' || true)
+  [ -z "$unpinned" ] || fail "$inst: actions not pinned by commit: $unpinned"
+  python3 - "$W/gi-release.yml" "$wf" <<'EOF' || fail "$inst: release.yml does not attest the way the reference workflow does"
+import re, sys
+
+def read(path):
+    return open(path, encoding="utf-8").read().splitlines()
+
+def permissions(lines):
+    """The 'permissions:' blocks: the workflow's (no indent) and the jobs' (indented), as sets."""
+    top, jobs = None, []
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\s*)permissions:\s*(#.*)?$", line)
+        if not m:
+            continue
+        block = set()
+        for inner in lines[i + 1:]:
+            if not inner.strip() or inner.lstrip().startswith("#"):
+                continue
+            if len(inner) - len(inner.lstrip()) <= len(m.group(1)):
+                break
+            key, _, value = inner.split("#")[0].strip().partition(":")
+            block.add((key.strip(), value.strip()))
+        if m.group(1):
+            jobs.append(block)
+        else:
+            top = block
+    return top, jobs
+
+def attestation(lines):
+    """[(line index, pinned commit, subject)] of every actions/attest-build-provenance step."""
+    env = {}
+    for line in lines:
+        m = re.match(r"^\s+([A-Z_]+):\s*([^\s#]+)\s*(#.*)?$", line)
+        if m:
+            env.setdefault(m.group(1), m.group(2))
+    found = []
+    for i, line in enumerate(lines):
+        m = re.match(r"^\s*(?:- )?uses:\s*actions/attest-build-provenance@(\S+)", line)
+        if not m:
+            continue
+        subject = None
+        for inner in lines[i + 1:i + 6]:
+            s = re.match(r"^\s+subject-path:\s*(.+?)\s*(#.*)?$", inner)
+            if s:
+                subject = s.group(1).strip("'\"")
+                e = re.fullmatch(r"\$\{\{\s*env\.([A-Z_]+)\s*\}\}", subject)
+                if e:
+                    subject = env.get(e.group(1))
+                break
+        found.append((i, m.group(1), subject))
+    return found
+
+ref, ours = read(sys.argv[1]), read(sys.argv[2])
+wrong = []
+ref_att, our_att = attestation(ref), attestation(ours)
+if len(ref_att) != 1:
+    sys.exit(f"the reference workflow has {len(ref_att)} attestation steps: this check no longer reads it")
+if len(our_att) != 1:
+    sys.exit(f"{len(our_att)} actions/attest-build-provenance steps, expected exactly one")
+(_, ref_pin, ref_subject), (at, pin, subject) = ref_att[0], our_att[0]
+if not re.fullmatch(r"[0-9a-f]{40}", pin):
+    wrong.append(f"actions/attest-build-provenance is pinned to '{pin}', not a 40-hex commit")
+if pin != ref_pin:
+    wrong.append(f"actions/attest-build-provenance@{pin}; the reference pins {ref_pin}")
+if ref_subject != "astra-gi.zip":
+    sys.exit(f"the reference attests '{ref_subject}', not astra-gi.zip: this check no longer reads it")
+if subject != ref_subject:
+    wrong.append(f"the attested subject is '{subject}'; the reference attests {ref_subject}")
+(ref_top, ref_jobs), (top, jobs) = permissions(ref), permissions(ours)
+if len(ref_jobs) != 1 or ref_top is None:
+    sys.exit("the reference workflow's permissions are not one default block and one job block: this check no longer reads it")
+show = lambda block: ", ".join(f"{k}: {v}" for k, v in sorted(block)) if block else "none"
+if top != ref_top:
+    wrong.append(f"the workflow's default permissions are [{show(top)}]; the reference's are [{show(ref_top)}]")
+if jobs != ref_jobs:
+    wrong.append(f"the job's permissions are {[show(j) for j in jobs]}; the reference's are [{show(ref_jobs[0])}]")
+publish = [i for i, line in enumerate(ours) if re.match(r"^\s*(?:- )?uses:\s*softprops/action-gh-release@", line)]
+if len(publish) != 1 or publish[0] < at:
+    wrong.append("the attestation step is not before the one step that publishes the release")
+if not any("GITHUB_REF_NAME#v" in line for line in ours):
+    wrong.append("no step checks the tag against the version")
+for w in wrong:
+    print("  " + w, file=sys.stderr)
+sys.exit(1 if wrong else 0)
+EOF
+done
 echo "workflow: OK"
 
 # The Mono one end to end: fetch, build as CI does, pack the zip.
@@ -123,20 +233,38 @@ echo "workflow: OK"
 ) || fail "the Mono project did not build and pack"
 echo "build and zip: OK"
 
-# The template as an author gets it, built and packed: the Mono one as its own release workflow
-# does; the IL2CPP one as the pinned runner's files under the generated manifest (see the header).
+# The template as an author gets it, built and packed as each flavour's own release workflow does.
 (
   cd "$W/community-mono"
   bash tools/fetch.sh >/dev/null
   dotnet build -c Release -p:TreatWarningsAsErrors=true -v q > build.log 2>&1 || { tail -20 build.log >&2; exit 1; }
   bash tools/make-astra-gi.sh >/dev/null
 ) || fail "the default Mono project did not build and pack"
+# IL2CPP releases a COMMITTED build (see the header). A placeholder stands in for the DLL the
+# compiler would write; the project's own targets (the marker, then the copy into prebuilt/) run as
+# they do after a real Release build; then the flavour's packer packs prebuilt/, as its workflow does.
+# (errexit is off inside a `( … ) || fail` block, so every step here says `|| exit 1` itself.)
 (
-  cd "$W/community-il2cpp"
-  bash tools/fetch.sh >/dev/null
-  cp astra-gi.toml foundation/unpacked/astra-gi.toml
-  ( cd foundation/unpacked && zip -qr - . ) > astra-gi.zip
-) || fail "the default IL2CPP manifest did not pack over its runner's files"
+  cd "$W/community-il2cpp" || exit 1
+  [ ! -e prebuilt ] || { echo "the template ships a prebuilt/ of its own" >&2; exit 1; }
+  # (MSBuild prints a property as written, "bin\Release/net6.0/"; the build itself reads it with /.)
+  out=$(dotnet msbuild AstraMyGame.csproj -getProperty:OutDir -p:Configuration=Release | tr '\\' '/')
+  [ -n "$out" ] && mkdir -p "$out" && printf 'a placeholder for the plugin tools/check-template.sh cannot compile\n' > "$out/AstraMyGame.dll" || exit 1
+  dotnet msbuild AstraMyGame.csproj -t:AstraItemMarker -p:Configuration=Release -v:q -nologo > prebuilt.log 2>&1 || { tail -20 prebuilt.log >&2; exit 1; }
+  [ "$(ls -A prebuilt | LC_ALL=C sort | tr '\n' ' ')" = "AstraMyGame.dll astra-item.json " ] || { echo "prebuilt/ holds: $(ls -A prebuilt | tr '\n' ' ')" >&2; exit 1; }
+  # The generated .gitignore: the committed build is committable, the game's interop is not.
+  git init -q . || exit 1
+  for ours in prebuilt/AstraMyGame.dll prebuilt/astra-item.json; do   # check-ignore: 0 ignored, 1 not, 128 an error
+    git check-ignore -q "$ours"; [ $? = 1 ] || { echo "the template's .gitignore hides $ours from a commit" >&2; exit 1; }
+  done
+  for theirs in BepInEx/plugins/Other.dll interop/GameCode.dll Il2Cppmscorlib.dll Assembly-CSharp.dll UnityEngine.CoreModule.dll Unity.TextMeshPro.dll; do
+    git check-ignore -q "$theirs" || { echo "the template's .gitignore lets $theirs (the game's, or a copied profile's) be committed" >&2; exit 1; }
+  done
+  bash tools/fetch.sh >/dev/null || exit 1
+  bash tools/make-astra-gi.sh >/dev/null || exit 1
+  unzip -l astra-gi.zip | grep -q 'BepInEx/plugins/AstraMyGame/AstraMyGame.dll' || exit 1
+  unzip -l astra-gi.zip | grep -q 'BepInEx/plugins/AstraMyGame/astra-item.json' || exit 1
+) || fail "the default IL2CPP project did not pack its committed build"
 
 # The Workshop's own check on both. A finding of any kind fails: the template is what a community
 # author copies, so it may not carry a line the catalogue refuses (2026-11: it shipped without

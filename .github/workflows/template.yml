@@ -6,10 +6,17 @@ name: template
 # finding allowed. (2026-11: the template shipped without [integration.loader] and
 # [integration.capabilities], and with an astra.* default id; every release built from it was refused.)
 #
+# The catalogue also takes a community release only with a build provenance attestation signed by
+# the author's own release.yml. So the script compares each flavour's generated release.yml with the
+# catalogue's reference workflow (AstraPlugins' templates/gi-release.yml, pinned in the script by
+# commit and SHA-256): the same actions/attest-build-provenance commit, the same permissions, the
+# same subject (astra-gi.zip); and, of ours, one attestation step before the release step.
+#
 # What runs here and what does not:
 #   - Mono: the full astra-gi.zip, fetched, built and packed as the template's own release.yml does;
-#   - IL2CPP: its generated manifest in a zip of the pinned runner's files, WITHOUT the plugin. An
-#     IL2CPP plugin compiles against a game's own interop assemblies, and CI has no game;
+#   - IL2CPP: that flavour releases a build the author COMMITS in prebuilt/ (its plugin compiles
+#     against a game's own interop assemblies, and CI has no game). Here a placeholder stands in for
+#     the DLL; the project's own targets write prebuilt/ and the flavour's own packer packs the zip;
 #   - the launcher's `inspect` prints SKIP: it needs an astra-game-launcher checkout beside this one.
 #     gi-probe's first step is that same launcher's parser opening the zip.
 # This workflow publishes nothing and writes nothing to the repository.

@@ -93,7 +93,7 @@ You get a repository that can already make a release:
 | `astra-gi.toml` | the manifest Astra installs from (step 8) |
 | `tools/fetch.sh` | downloads that release's SDK package into `nuget-local/` and its "Astra for any Unity game" zip into `foundation/`, each checked against a pinned SHA-256 |
 | `tools/make-astra-gi.sh` | lays out `astra-gi.zip` (step 8) |
-| `.github/workflows/release.yml` | builds `astra-gi.zip` on a pushed tag and attaches it to the release (step 9; Mono only) |
+| `.github/workflows/release.yml` | builds `astra-gi.zip` on a pushed tag, attests it and attaches it to the release (step 9; for IL2CPP it packs the build you commit in `prebuilt/`, step 11) |
 | `nuget.config` | nuget.org, BepInEx's feed, and `nuget-local/` for the SDK |
 | `LICENSE` | MIT, in your name, like the published integrations. Want another licence? Change it and `license` in `astra-gi.toml` |
 | `astra-item.toml` | a proposed marketplace manifest that nothing reads yet |
@@ -542,7 +542,17 @@ only. On a pushed tag `v*` it:
    `version` in `astra-item.toml` all name the same version;
 2. runs `tools/fetch.sh`: the SDK and the foundation's zip, each checked against its SHA-256;
 3. restores in locked mode (your `packages.lock.json`) and builds with warnings as errors;
-4. runs `tools/make-astra-gi.sh` and attaches `astra-gi.zip` to the tag's release.
+4. runs `tools/make-astra-gi.sh`;
+5. attests the zip's build provenance (`actions/attest-build-provenance`: GitHub's signed statement
+   that this workflow built this exact zip from this commit), then attaches `astra-gi.zip` to the
+   tag's release. Astra's Workshop takes a community release only with an attestation. Anyone can
+   check one: `gh attestation verify astra-gi.zip --repo <owner>/<repository> --signer-workflow
+   <owner>/<repository>/.github/workflows/release.yml`.
+
+The attestation must be signed by your own `release.yml`: do not rename or move the workflow, and
+keep its attestation step (before the release step, its action pinned by commit) and its
+permissions. A zip attached by hand has no attestation and is refused. An IL2CPP integration's
+workflow packs a build you commit instead of compiling one: [step 11](#11-il2cpp-integrations).
 
 To release:
 
@@ -596,10 +606,22 @@ The launcher is open source: [astra-game-launcher](https://github.com/mihailinl/
   (`BepInEx/interop`). Set `GameDir` to the folder that holds `BepInEx/interop`: with Astra's
   launcher, the game's profile (`dotnet build -c Release -p:GameDir=<profile>`). Without it the
   build fails (no Unity types).
-- Those assemblies are generated from the game's files, so no CI can build your plugin, and the
-  template makes no workflow for IL2CPP. Release by hand: build, `bash tools/make-astra-gi.sh`, then
-  `gh release create vX.Y.Z astra-gi.zip`. No IL2CPP integration is published yet: open an issue
-  on astra-bepinex if you plan one.
+- Those assemblies are generated from the game's files, so no CI can build your plugin, and you
+  must **never commit them** (the template's `.gitignore` keeps `interop/`, `BepInEx/` and the
+  game's DLLs out). The release packs a build you commit instead:
+  1. build on your machine: `dotnet build -c Release -p:GameDir=<profile>`. Every Release build
+     leaves your plugin's DLL and `astra-item.json` in `prebuilt/`;
+  2. commit, `prebuilt/` included (those two files, nothing else);
+  3. tag `vX.Y.Z` and push the tag.
+
+  The template's `.github/workflows/release.yml` for IL2CPP compiles nothing. It checks that the
+  tag, the `.csproj`, `astra-gi.toml`, `astra-item.toml` and `prebuilt/astra-item.json` name one
+  version and that `prebuilt/` holds only those two files, runs `tools/fetch.sh` and
+  `tools/make-astra-gi.sh` (the same packer, reading `prebuilt/`), prints the zip's SHA-256,
+  attests it and attaches it to the tag's release, as in [step 9](#9-release-it-on-github). The
+  attestation says the zip was packed from the tagged commit; the DLL in it is the one you built
+  and committed. No IL2CPP integration is published yet: open an issue on astra-bepinex if you
+  plan one.
 - Your own Unity API calls can be stripped from the game too. Run the audit on YOUR plugin:
   `check-game-members il2cpp <your plugin.dll> <profile>/BepInEx/interop`
   ([`CONTRIBUTING.md`](../CONTRIBUTING.md#il2cpp-games-the-stripping-audit)).
