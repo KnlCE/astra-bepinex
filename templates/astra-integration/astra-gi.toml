@@ -17,6 +17,13 @@ repo = "https://github.com/GITHUB_OWNER/AstraIntegration"
 # actually ships chain/ — tools/check-template.sh's launcher `inspect` step is what catches this
 # class of mistake before it reaches a release.
 
+# What this integration asks of Astra: the [[config_writes]] row below hands it the avatar bridge's
+# ${bridge_token}, which only the "presentation" capability allows (the Workshop catalogue refuses a
+# manifest that passes the token on without declaring it). Nested under [integration], so a launcher
+# that does not know the table reads past it.
+[integration.capabilities]
+companion = ["presentation"]
+
 [target]                           # which game
 steam_appid = 0000000
 exe = "GAME_EXE"                   # relative to the game folder

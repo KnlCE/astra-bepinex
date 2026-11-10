@@ -23,6 +23,13 @@ loader = "bepinex5"
 chain = "${profile}/chain/Astra.Chain.dll"
 chain_config = "${profile}/chain/chain.ini"
 
+# What this integration asks of Astra: the [[config_writes]] row below hands it the avatar bridge's
+# ${bridge_token}, which only the "presentation" capability allows (the Workshop catalogue refuses a
+# manifest that passes the token on without declaring it). Nested under [integration], so a launcher
+# that does not know the table reads past it.
+[integration.capabilities]
+companion = ["presentation"]
+
 [target]                           # a RUNNER: any Unity (Mono) game the user picks
 engine = "unity-mono"
 exe = "*"                          # the user picks the game; the launcher checks it is Unity Mono
