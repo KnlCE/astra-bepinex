@@ -17,6 +17,13 @@ repo = "https://github.com/GITHUB_OWNER/AstraIntegration"
 # actually ships chain/ — tools/check-template.sh's launcher `inspect` step is what catches this
 # class of mistake before it reaches a release.
 
+# The one file the game loads this integration through: Doorstop's winhttp.dll, which the
+# [[game_files]] row below places beside the game's program. A game loads a DLL of that name by
+# itself, so the Workshop catalogue refuses a community release that places one without naming it
+# here (loader-undeclared). Name only what your own [[game_files]] place.
+[integration.loader]
+proxies = ["winhttp.dll"]
+
 # What this integration asks of Astra: the [[config_writes]] row below hands it the avatar bridge's
 # ${bridge_token}, which only the "presentation" capability allows (the Workshop catalogue refuses a
 # manifest that passes the token on without declaring it). Nested under [integration], so a launcher

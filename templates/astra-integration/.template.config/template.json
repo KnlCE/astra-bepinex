@@ -75,8 +75,8 @@
     "id": {
       "type": "parameter",
       "datatype": "text",
-      "defaultValue": "astra.my-game",
-      "description": "The integration's id: its BepInEx GUID and its marketplace id (\"astra.peak\"). It must match ^[A-Za-z0-9][A-Za-z0-9._-]*$: anything else is refused and nothing is written.",
+      "defaultValue": "your-github-name.my-game",
+      "description": "The integration's id: its BepInEx GUID and its id in Astra's Workshop, under a prefix of your own (\"your-github-name.peak\"). It must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ and may not start with astra. or minice. (reserved for Astra's own integrations; the Workshop refuses them): anything else is refused and nothing is written.",
       "replaces": "astra.integration-id"
     },
     "runtime": {
@@ -168,7 +168,7 @@
       "datatype": "bool",
       "parameters": {
         "source": "id",
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        "pattern": "^(?!(?i:astra|minice)\\.)[A-Za-z0-9][A-Za-z0-9._-]*$"
       }
     },
     "ownerValid": {
@@ -337,7 +337,7 @@
       "continueOnError": false,
       "manualInstructions": [
         {
-          "text": "--id is not an integration id: it must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ (letters, digits, '.', '_', '-'; e.g. astra.peak). Run dotnet new again with a valid one."
+          "text": "--id is not an integration id: it must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ (letters, digits, '.', '_', '-'; e.g. your-github-name.peak) and may not start with astra. or minice., which are reserved for Astra's own integrations. Run dotnet new again with a valid one."
         }
       ]
     },

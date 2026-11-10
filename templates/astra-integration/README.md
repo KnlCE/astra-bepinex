@@ -60,6 +60,12 @@ game's profile). Those are the game's files, so this cannot build in CI: release
 #endif
 3. A tag is final: Astra records each tag's zip by its digest. To fix anything, publish a new tag.
 
+Astra's Workshop checks every release's `astra-gi.toml`. Keep its `[integration.loader]` table (it
+names `winhttp.dll`, the one file placed beside the game's program that the game loads by itself)
+and its `[integration.capabilities]` table (it says this integration receives the avatar bridge's
+token), and keep the `id` under a prefix of your own: `astra.` and `minice.` are reserved for
+Astra's own integrations. A release without the two tables, or with a reserved id, is refused.
+
 A newer foundation for your players: `tools/fetch.sh` says how to move to it.
 
 ## Rules of the road

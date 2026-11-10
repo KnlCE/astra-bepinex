@@ -1,0 +1,51 @@
+name: template
+# The integration template (templates/astra-integration) is what a community author copies, so what
+# it generates must be a release Astra's Workshop takes. tools/check-template.sh generates it, builds
+# the Mono flavour from public inputs only, and runs the catalogue's own check on the result:
+# `gi-probe check --provenance community`, pinned in that script by version and SHA-256, with no
+# finding allowed. (2026-11: the template shipped without [integration.loader] and
+# [integration.capabilities], and with an astra.* default id; every release built from it was refused.)
+#
+# What runs here and what does not:
+#   - Mono: the full astra-gi.zip, fetched, built and packed as the template's own release.yml does;
+#   - IL2CPP: its generated manifest in a zip of the pinned runner's files, WITHOUT the plugin. An
+#     IL2CPP plugin compiles against a game's own interop assemblies, and CI has no game;
+#   - the launcher's `inspect` prints SKIP: it needs an astra-game-launcher checkout beside this one.
+#     gi-probe's first step is that same launcher's parser opening the zip.
+# This workflow publishes nothing and writes nothing to the repository.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "templates/**"
+      - "tools/check-template.sh"
+      - ".github/workflows/template.yml"
+  pull_request:
+    paths:
+      - "templates/**"
+      - "tools/check-template.sh"
+      - ".github/workflows/template.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Every action is pinned by its COMMIT, never a tag a third party can move (the same two pins as the
+# template's own release.yml). The comment names the release that commit is.
+
+jobs:
+  check-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Generate, build, pack and gi-probe the template
+        run: bash tools/check-template.sh

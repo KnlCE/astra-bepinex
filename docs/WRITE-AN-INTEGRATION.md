@@ -65,7 +65,7 @@ The template comes from this repository (neither it nor the SDK package is on nu
 ```bash
 git clone https://github.com/mihailinl/astra-bepinex
 dotnet new install ./astra-bepinex/templates/astra-integration
-dotnet new astra-integration -n AstraMyGame --game "My Game" --id astra.mygame --runtime mono \
+dotnet new astra-integration -n AstraMyGame --game "My Game" --id your-github-name.mygame --runtime mono \
   --steamAppId 1234560 --owner your-github-name
 cd AstraMyGame && git init      # your new repository
 ```
@@ -78,7 +78,7 @@ nothing and prints `REFUSED: nothing was written.` with the rule it breaks; run 
 | `-n` | the project, assembly and folder name |
 | `--game` | the game's name as players know it (required; in code and manifests a `"` becomes `'` and a `\` is dropped) |
 | `--steamAppId` | the game's Steam app id; its store page address has it (required) |
-| `--id` | your integration's id: its BepInEx GUID, and the id in `astra-gi.toml` (`astra.<game>`; letters, digits, `.`, `_`, `-`, else nothing is written) |
+| `--id` | your integration's id: its BepInEx GUID, and the id in `astra-gi.toml`, under a prefix of your own (`<your name>.<game>`; letters, digits, `.`, `_`, `-`, and never starting with `astra.` or `minice.`, which are reserved for Astra's own integrations and refused by the Workshop; else nothing is written) |
 | `--runtime` | `mono` (BepInEx 5) or `il2cpp` (BepInEx 6, [step 11](#11-il2cpp-integrations)) |
 | `--owner` | the GitHub user or organisation that will own the repository: its address in `astra-gi.toml`, the author, the `LICENSE`'s copyright (a GitHub name: letters, digits, `-`, else nothing is written) |
 | `--exe` | the game's executable, relative to its folder (default: `<game>.exe`; a `\` becomes `/`) |
@@ -420,7 +420,7 @@ set's default. `Params` is cleared every frame, so set every fact every frame.
 ```csharp
 using Astra.Bridge;   // ParamType — SDK 0.7.0 and newer
 
-var astra = AstraSdk.Register("astra.mygame", "My Game")
+var astra = AstraSdk.Register("your-github-name.mygame", "My Game")
     .DeclareParam("climbing", ParamType.Bool)
     .DeclareParam("water_depth", ParamType.Float);
 ```
@@ -471,11 +471,11 @@ option from the README.
 Then read `BepInEx/LogOutput.log` (in the profile, or in the game folder for a hand install):
 
 - your own `Logger.LogInfo` line: your plugin loaded;
-- `integration 'astra.mygame' for My Game is in charge`: the foundation took your registration;
+- `integration 'your-github-name.mygame' for My Game is in charge`: the foundation took your registration;
 - `connected to Astra on 127.0.0.1:25600`: the engine is there;
 - `her: on screen (…), 3.1 m from '<camera>'; in 10 s drawn … times`: she is placed and drawn
   ([`CONTRIBUTING.md`](../CONTRIBUTING.md#reporting-a-game-that-does-not-work) explains the line);
-- `the integration 'astra.mygame' failed (…) and is switched off`: your code threw; the exception
+- `the integration 'your-github-name.mygame' failed (…) and is switched off`: your code threw; the exception
   follows;
 - a BepInEx error about a missing dependency: the foundation in the game is older than the SDK you
   compiled against.
@@ -497,6 +497,14 @@ The template wrote `astra-gi.toml` from your options. Check:
 - `[integration]`: `id`, `name`, `version`, `authors`, `license`, `repo`;
 - `[target]`: `steam_appid`, `exe` (relative to the game folder: `--exe` set it, else `<game>.exe`),
   `platforms`. Keep `anti_cheat = "none"`: Astra refuses anything else.
+
+Keep the two small tables under `[integration]` as they are; the Workshop's check refuses a
+release without them:
+
+- `[integration.loader] proxies = ["winhttp.dll"]` names the one DLL the game loads this integration
+  through (Doorstop's proxy, placed beside the game's program by `[[game_files]]`);
+- `[integration.capabilities] companion = ["presentation"]` says that `[[config_writes]]` hands the
+  foundation the avatar bridge's `${bridge_token}`.
 
 Keep `[[files]]`, `[[game_files]]`, `[launch]` and `[[config_writes]]` as they are. The `winhttp.dll`
 digest is the one of the Doorstop proxy that BepInEx ships, and the zip carries that very file.
@@ -613,7 +621,7 @@ swimming, dancing. The foundation can sample that animation while one of your ra
 offer it to the player as her move for that fact:
 
 ```csharp
-var astra = AstraSdk.Register("astra.mygame", "My Game")
+var astra = AstraSdk.Register("your-github-name.mygame", "My Game")
     .DeclareParam("climbing", ParamType.Bool);
 astra.OnFrame(f => f.Params.Set("climbing", MyPlayer.Climbing));
 // Humanoid Animator (it has an Avatar): Unity knows its bones.

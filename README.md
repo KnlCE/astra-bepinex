@@ -117,7 +117,7 @@ that world, raw facts for her animations. It is a small separate BepInEx plugin 
 repository, built on the foundation's SDK (`Astra.Unity.Sdk`):
 
 ```csharp
-var astra = AstraSdk.Register("astra.mygame", "My Game");
+var astra = AstraSdk.Register("your-github-name.mygame", "My Game");
 astra.Defaults.MatchPlayerHeight = 0.95f;           // as tall as 95% of the player
 astra.UsePlayer(cam => new PlayerInfo { Feet = …, Forward = …, Root = …, Height = … });
 astra.UseBrain(new MyBrain());                       // where she stands; call f.Default for ordinary frames

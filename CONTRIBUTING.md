@@ -435,7 +435,10 @@ Checklist:
       `docs/RENDER-CASES.md`.
 - [ ] No game files, no interop, no built DLLs. Bundles only with the editor version (rule 4).
 - [ ] A change to `templates/`: `tools/check-template.sh` passes (it needs the network for
-      `tools/fetch.sh`, and installs the template into a private cache, never yours).
+      `tools/fetch.sh`, and installs the template into a private cache, never yours). It also runs
+      the Workshop's own check, `gi-probe check --provenance community`, on what the template
+      generates with its default options: no finding is allowed. CI runs the same script
+      (`.github/workflows/template.yml`).
 - [ ] The protocol changes only in the engine's `BRIDGE.md`; `docs/PROTOCOL.md` follows it
       (`tools/check-protocol-sync.sh --write`, with the engine checked out beside this repository or
       `ASTRA_ENGINE_DIR` set; the check prints SKIP without one).
