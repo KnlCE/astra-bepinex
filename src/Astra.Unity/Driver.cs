@@ -231,7 +231,7 @@ namespace Astra.Unity
             // (Compositor.DepthState says so). Held only while she is drawn into the main camera.
             HoldDepth(compositor != null && compositor.Show ? main : null);
             if (main == null) return;
-            if (wasLive && whereLine.Due) sayingWhere.Run(() => whereLine.Check(main, her, HerHeight * scale, compositor, log), warn);
+            if (wasLive && whereLine.Due) sayingWhere.Run(() => whereLine.Check(main, her, HerHeight * scale, compositor, log, settings.PictureAge.Value), warn);
         }
 
         /// <summary>

@@ -48,6 +48,8 @@ namespace Astra.Unity
         public Vector3 Right, Up, Fwd;
         /// <summary>tan of the half field of view, horizontally and vertically.</summary>
         public float TanX, TanY;
+        /// <summary>When it was sent (unscaled time): how old a picture drawn for it is when shown.</summary>
+        public float SentAt;
     }
 
     /// <summary>
@@ -103,6 +105,7 @@ namespace Astra.Unity
                 Fwd = pose.Fwd,
                 TanX = tanX,
                 TanY = tanY,
+                SentAt = Time.unscaledTime,
             };
             double fovY = 2 * Math.Atan(tanY) * (180 / Math.PI);
             string json = Messages.Cam(shot.Id, Wire.Of(shot.Pos), Wire.Of(shot.Fwd), Wire.Of(shot.Up), fovY, w, h, null, view);
@@ -126,6 +129,9 @@ namespace Astra.Unity
                 ? $"the camera '{cam.name}' has a projection with no field of view: Astra cannot draw for it"
                 : $"the camera '{cam.name}' is orthographic: Astra draws for perspective cameras only";
         }
+
+        /// <summary>The id of the newest camera sent (0 before the first).</summary>
+        public long LastId => next;
 
         /// <summary>The camera sent as <paramref name="id"/>, while it is no older than a second.</summary>
         public bool Find(long id, out Shot shot) => history.Find(id, Time.unscaledTime, out shot);
